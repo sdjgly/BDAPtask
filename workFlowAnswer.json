@@ -1,0 +1,46 @@
+{
+  "requestId": "string",               // 请求ID
+  "conversation_id": "string",         // 对话ID
+  "workflow_info": {                   // 工作流信息
+    "userId": "string"                 // 用户ID
+  },
+  "nodes": [                           // 节点列表
+    {
+      "id": "string"					//组件id
+      "name": "string",                // 组件名称（必须从指定列表中选取）
+      "seqId":"string",                       //组件顺序ID
+      “position”:[100,200],             //节点位置(x,y)
+      "simpleAttributes": [            // 简单属性列表
+        {
+          "name": "string",            // 属性名
+          "value": "string",           // 属性值
+          "valueType": "string"        // 属性类型（Int/Double/String/Boolean）
+        }
+      ],
+      "complicatedAttributes": [       // 复杂属性列表
+        {
+          "name": "string",            // 属性名
+          "value": {}                  // JSON对象
+        }
+      ],
+      "inputAnchors": [
+        {
+          "sourceAnchors": [
+            {
+              "id": "string"           // 源节点组件ID
+            }
+          ]
+        }
+      ],
+      "outputAnchors": [
+        {
+          "targetAnchors": [
+            {
+              "id": "string"           // 目标节点组件ID
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

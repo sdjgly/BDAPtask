@@ -1,0 +1,12 @@
+name,age,salary,department,is_active
+John,25,5000,tech,True
+Mary,,6000,sales,False
+Tom,30,,tech,True
+
+
+
+Jane,28,5500,,True
+Bob,,,hr,False
+Alice,35,7000,tech,
+David,27,4800,sales,True
+Emma,32,6500,tech,True

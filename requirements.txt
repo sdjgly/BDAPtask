@@ -1,0 +1,9 @@
+langchain
+faiss-cpu
+pymupdf
+PyYAML
+langchain-community
+tqdm
+unstructured
+unstructured[docx]
+python-docx
