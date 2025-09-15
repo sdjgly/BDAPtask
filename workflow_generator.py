@@ -18,14 +18,11 @@ class WorkflowGenerationRequest(BaseModel):
     user_id: Optional[str] = None       # 用户ID
     conversation_id: Optional[str] = None # 对话ID
     user_prompt: str                    # 用户需求描述
-    workflow_name: str                  # 工作流名称
-    workflow_description: Optional[str] = None  # 工作流描述
     template_type: Optional[str] = "data_processing" # 模板类型
     service_type: Optional[str] = "ml"  # 服务类型
     isWorkFlow: bool = True             # 设为 true
-    callback_url: Optional[str] = None  # Java端回调地址
 
-# 异步响应模型
+# 响应模型
 class AsyncWorkflowResponse(BaseModel):
     requestId: str
     status: str  # "processing", "completed", "failed"
@@ -95,7 +92,7 @@ async def generate_workflow(request: WorkflowGenerationRequest):
     """异步生成工作流的主要接口"""
     try:
         # 启动后台任务处理工作流生成
-        asyncio.create_task(process_workflow_generation(request))
+        asyncio.ensure_future(process_workflow_generation(request))
         
         return AsyncWorkflowResponse(
             requestId=request.requestId,
@@ -122,8 +119,6 @@ async def process_workflow_generation(request: WorkflowGenerationRequest):
         # 2. 解析LLM响应
         workflow_structure = parse_llm_response(
             llm_response=llm_response,
-            workflow_name=request.workflow_name,
-            workflow_description=request.workflow_description,
             user_id=request.user_id,
             service_type=request.service_type,
             request_id=request.requestId,
@@ -140,7 +135,7 @@ async def process_workflow_generation(request: WorkflowGenerationRequest):
                 requestId=request.requestId,
                 status="error",
                 error_message=f"工作流结构校验失败: {', '.join(errors)}"
-            ), request.callback_url)
+            ))
             return
         
         if warnings:
@@ -153,7 +148,7 @@ async def process_workflow_generation(request: WorkflowGenerationRequest):
             conversation_id=new_conversation_id,
             workflow_info=sanitized_workflow["workflow_info"],
             nodes=sanitized_workflow["nodes"]
-        ), request.callback_url)
+        ))
         
     except Exception as e:
         # 发送失败结果给Java
@@ -161,14 +156,13 @@ async def process_workflow_generation(request: WorkflowGenerationRequest):
             requestId=request.requestId,
             status="error",
             error_message=f"工作流生成失败: {str(e)}"
-        ), request.callback_url)
+        ))
 
-async def send_result_to_java(result: WorkflowResult, callback_url: Optional[str] = None):
+async def send_result_to_java(result: WorkflowResult):
     """发送处理结果给Java端"""
     try:
-        if not callback_url:
-            # 使用指定的Java后端回调地址
-            callback_url = "http://localhost:7003/llm/update"
+        # 使用固定的回调URL
+        callback_url = "http://localhost:7003/llm/update"
         
         headers = {
             "Content-Type": "application/json"
@@ -251,8 +245,7 @@ async def call_dify_with_workflow(model: str, prompt: str, user_id: str, request
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"[未知错误] {e}")
 
-def parse_llm_response(llm_response: Any, workflow_name: str, workflow_description: str, 
-                      user_id: str, service_type: str, request_id: str, conversation_id: str = None) -> Dict[str, Any]:
+def parse_llm_response(llm_response: Any, user_id: str, service_type: str, request_id: str, conversation_id: str = None) -> Dict[str, Any]:
     """解析LLM返回的文本，提取JSON结构"""
     try:
         if isinstance(llm_response, tuple) and len(llm_response) >= 1:
