@@ -310,7 +310,7 @@ class QueueManager:
                     "completedRequests": new_completed
                 }
 
-                java_backend_url = "http://localhost:7003/llm/queue/update"
+                java_backend_url = "http://localhost:7003/llm/update"
 
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     resp = await client.post(java_backend_url, json=payload)
@@ -374,7 +374,7 @@ async def process_request(request: ProcessRequest):
     )
 
 
-@app.post("/llm/queue/update")
+@app.post("/llm/update")
 async def update_queue_status(request: QueueUpdateRequest):
     return {"status": "success", "message": "Queue status updated"}
 
@@ -416,5 +416,6 @@ if __name__ == "__main__":
 
     if service_id:
         atexit.register(deregister_service, service_id)
+
 
     uvicorn.run(app, host="0.0.0.0", port=SERVICE_PORT)
