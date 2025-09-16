@@ -37,7 +37,7 @@ class WorkflowResult(BaseModel):
     nodes: Optional[List[Dict[str, Any]]] = None
     error_message: Optional[str] = None
 
-# 其他模型保持不变...
+# 更新后的模型定义
 class WorkflowInfo(BaseModel):
     userId: str
 
@@ -51,21 +51,25 @@ class ComplicatedAttribute(BaseModel):
     value: Dict[str, Any]
 
 class SourceAnchor(BaseModel):
-    id: str
+    nodeName: str
+    nodeMark: int
 
 class TargetAnchor(BaseModel):
-    id: str
+    nodeName: str
+    nodeMark: int
 
 class InputAnchor(BaseModel):
-    sourceAnchors: List[SourceAnchor] = []
+    numOfConnectedEdges: int = 0
+    sourceAnchor: Optional[SourceAnchor] = None
 
 class OutputAnchor(BaseModel):
+    numOfConnectedEdges: int = 0
     targetAnchors: List[TargetAnchor] = []
 
 class Node(BaseModel):
     id: str
     name: str
-    seqId: str
+    mark: str                           # 组件唯一标识
     position: List[int]
     simpleAttributes: List[SimpleAttribute] = []
     complicatedAttributes: List[ComplicatedAttribute] = []
@@ -161,7 +165,6 @@ async def process_workflow_generation(request: WorkflowGenerationRequest):
 async def send_result_to_java(result: WorkflowResult):
     """发送处理结果给Java端"""
     try:
-        # 使用固定的回调URL
         callback_url = "http://localhost:7003/llm/update"
         
         headers = {
@@ -187,7 +190,7 @@ async def send_result_to_java(result: WorkflowResult):
     except Exception as e:
         print(f"发送结果给Java端时发生未知错误: {e}")
 
-# 保持原有的辅助函数
+# 保持原有的dify调用函数
 async def call_dify_with_workflow(model: str, prompt: str, user_id: str, request_id: str, 
                                  conversation_id: Optional[str] = None, isWorkFlow: str = "false") -> tuple:
     """专门用于工作流生成的dify调用函数"""
@@ -286,16 +289,22 @@ def parse_llm_response(llm_response: Any, user_id: str, service_type: str, reque
                 workflow_data["workflow_info"] = {}
             workflow_data["workflow_info"]["userId"] = user_id or "anonymous"
             
+            # 处理节点数据，适配新格式
             for i, node in enumerate(workflow_data["nodes"]):
                 if not isinstance(node, dict):
                     raise ValueError(f"节点{i}不是字典类型，而是: {type(node)}")
                 
-                if "seqId" not in node:
-                    node["seqId"] = node.get("id", f"node_{i}")
+                # 确保必要字段存在
+                if "id" not in node:
+                    node["id"] = f"node_{i}"
+                
+                if "mark" not in node:
+                    node["mark"] = node.get("id", f"node_{i}")
                 
                 if "position" not in node:
                     node["position"] = [100 + i * 200, 100]
                 
+                # 处理position字段格式
                 if isinstance(node["position"], dict):
                     if "x" in node["position"] and "y" in node["position"]:
                         node["position"] = [node["position"]["x"], node["position"]["y"]]
@@ -303,23 +312,44 @@ def parse_llm_response(llm_response: Any, user_id: str, service_type: str, reque
                 if "name" not in node:
                     node["name"] = node.get("id", f"node_{i}")
                 
+                # 初始化属性列表
                 node.setdefault("simpleAttributes", [])
                 node.setdefault("complicatedAttributes", [])
                 node.setdefault("inputAnchors", [])
                 node.setdefault("outputAnchors", [])
                 
+                # 确保锚点是列表类型
                 if not isinstance(node["inputAnchors"], list):
                     node["inputAnchors"] = []
                 if not isinstance(node["outputAnchors"], list):
                     node["outputAnchors"] = []
                 
+                # 处理inputAnchors新格式
                 for input_anchor in node["inputAnchors"]:
                     if isinstance(input_anchor, dict):
-                        input_anchor.setdefault("sourceAnchors", [])
+                        input_anchor.setdefault("numOfConnectedEdges", 0)
+                        # 如果有旧格式的sourceAnchors，转换为新格式
+                        if "sourceAnchors" in input_anchor and input_anchor["sourceAnchors"]:
+                            if len(input_anchor["sourceAnchors"]) > 0:
+                                old_source = input_anchor["sourceAnchors"][0]
+                                input_anchor["sourceAnchor"] = {
+                                    "nodeName": old_source.get("nodeName", ""),
+                                    "nodeMark": old_source.get("nodeMark", 0)
+                                }
+                            # 移除旧字段
+                            input_anchor.pop("sourceAnchors", None)
                 
+                # 处理outputAnchors新格式
                 for output_anchor in node["outputAnchors"]:
                     if isinstance(output_anchor, dict):
+                        output_anchor.setdefault("numOfConnectedEdges", 0)
                         output_anchor.setdefault("targetAnchors", [])
+                        
+                        # 确保targetAnchors中的每个元素都有正确的格式
+                        for target_anchor in output_anchor["targetAnchors"]:
+                            if isinstance(target_anchor, dict):
+                                target_anchor.setdefault("nodeName", "")
+                                target_anchor.setdefault("nodeMark", 0)
             
             return workflow_data
         else:
